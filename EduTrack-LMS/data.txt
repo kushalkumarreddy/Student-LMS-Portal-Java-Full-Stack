@@ -1,0 +1,30 @@
+Field	Value
+Email	admin@edutrack.com
+Password	Admin@123
+Role	ADMIN
+
+
+{
+  "email": "admin@edutrack.com",
+  "password": "Admin@123"
+}
+
+
+{
+  "email": "student@gmail.com",
+  "password": "Student@123"
+}
+
+
+admin@edutrack.com
+Admin@123
+
+student@gmail.com
+Student@123
+
+
+Operation	HTTP method	Endpoint
+View courses	GET	/api/courses
+Add course	POST	/api/courses
+Edit course	PUT	/api/courses/{id}
+Delete course	DELETE	/api/courses/{id}
