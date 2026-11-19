@@ -1,24 +1,22 @@
 
-import axios from 'axios';
-
-const API_URL = 'http://localhost:8080/api/courses';
+import api from './api';
 
 export const getAllCourses = async () => {
-  const response = await axios.get(API_URL);
+  const response = await api.get('/courses');
   return response.data;
 };
 
-export const addCourse = async (course) => {
-  const response = await axios.post(API_URL, course);
+export const addCourse = async (courseData) => {
+  const response = await api.post('/courses', courseData);
   return response.data;
 };
 
-export const updateCourse = async (id, course) => {
-  const response = await axios.put(`${API_URL}/${id}`, course);
+export const updateCourse = async (courseId, courseData) => {
+  const response = await api.put(`/courses/${courseId}`, courseData);
   return response.data;
 };
 
-export const deleteCourse = async (id) => {
-  const response = await axios.delete(`${API_URL}/${id}`);
+export const deleteCourse = async (courseId) => {
+  const response = await api.delete(`/courses/${courseId}`);
   return response.data;
 };

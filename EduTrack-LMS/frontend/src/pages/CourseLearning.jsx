@@ -70,9 +70,11 @@ function CourseLearning() {
         setLessons(data || []);
         setSelectedLesson(0);
       } catch (err) {
+        const data = err.response?.data;
         setError(
-          err.response?.data?.message ||
-          'Unable to load course lessons.'
+          typeof data === 'string'
+            ? data
+            : data?.message || 'Unable to load course lessons.'
         );
       } finally {
         setLoading(false);

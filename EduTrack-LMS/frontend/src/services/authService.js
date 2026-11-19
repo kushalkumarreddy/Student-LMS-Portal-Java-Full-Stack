@@ -1,24 +1,24 @@
 
-import axios from 'axios';
+import api from './api';
 
-const API_URL = 'http://localhost:8080/api/auth';
 const SESSION_KEY = 'edutrack_user';
 
 export const loginUser = async (email, password) => {
-  const response = await axios.post(`${API_URL}/login`, {
+  const response = await api.post('/auth/login', {
     email,
     password
   });
 
-  const user = response.data;
+  localStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify(response.data)
+  );
 
-  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-
-  return user;
+  return response.data;
 };
 
 export const registerStudent = async (email, password) => {
-  const response = await axios.post(`${API_URL}/register`, {
+  const response = await api.post('/auth/register', {
     email,
     password
   });
@@ -36,6 +36,13 @@ export const getCurrentUser = () => {
   }
 };
 
-export const logoutUser = () => {
+export const logoutUser = async () => {
+  try {
+    await api.post('/auth/logout');
+  } catch {
+    // Clear the local session even if the server is unavailable.
+  }
+
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem('edutrack_learning_course');
 };

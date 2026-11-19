@@ -1,11 +1,8 @@
 
-import axios from 'axios';
-
-const API_URL = 'http://localhost:8080/api/enrollments';
+import api from './api';
 
 export const enrollInCourse = async (studentId, courseId) => {
-  const response = await axios.post(API_URL, {
-    studentId,
+  const response = await api.post('/enrollments', {
     courseId
   });
 
@@ -13,8 +10,8 @@ export const enrollInCourse = async (studentId, courseId) => {
 };
 
 export const getStudentEnrollments = async (studentId) => {
-  const response = await axios.get(
-    `${API_URL}/student/${studentId}`
+  const response = await api.get(
+    `/enrollments/student/${studentId}`
   );
 
   return response.data;

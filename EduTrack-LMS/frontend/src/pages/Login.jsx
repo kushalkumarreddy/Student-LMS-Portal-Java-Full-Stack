@@ -241,15 +241,6 @@ function Login() {
                 {isRegister ? 'Sign In' : 'Register'}
               </button>
             </div>
-
-            {!isRegister && (
-              <div className="text-center mt-4">
-                <small className="text-muted">
-                  Contact your administrator if you need help
-                  accessing your account.
-                </small>
-              </div>
-            )}
           </div>
 
         </div>

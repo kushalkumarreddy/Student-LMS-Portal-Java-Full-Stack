@@ -5,26 +5,44 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import com.edutrack.lms.entity.Course;
 import com.edutrack.lms.repository.CourseRepository;
+import com.edutrack.lms.repository.EnrollmentRepository;
+import com.edutrack.lms.repository.LessonRepository;
 
 @RestController
 @RequestMapping("/api/courses")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 public class CourseController {
 
     private final CourseRepository courseRepository;
+    private final LessonRepository lessonRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
-    public CourseController(CourseRepository courseRepository) {
+    public CourseController(
+            CourseRepository courseRepository,
+            LessonRepository lessonRepository,
+            EnrollmentRepository enrollmentRepository) {
         this.courseRepository = courseRepository;
+        this.lessonRepository = lessonRepository;
+        this.enrollmentRepository = enrollmentRepository;
     }
 
     // Get all courses
     @GetMapping
     public List<Course> getAllCourses() {
         return courseRepository.findAll();
+    }
+
+    // Get single course by ID
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getCourseById(@PathVariable Long id) {
+        return courseRepository.findById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     // Add a new course
@@ -72,6 +90,7 @@ public class CourseController {
     }
 
     // Delete a course
+    @Transactional
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteCourse(@PathVariable Long id) {
 
@@ -79,6 +98,8 @@ public class CourseController {
             return ResponseEntity.notFound().build();
         }
 
+        lessonRepository.deleteAllByCourse_Id(id);
+        enrollmentRepository.deleteAllByCourse_Id(id);
         courseRepository.deleteById(id);
 
         return ResponseEntity.ok("Course deleted successfully");

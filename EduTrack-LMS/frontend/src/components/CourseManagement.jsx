@@ -15,12 +15,13 @@ const emptyCourse = {
   duration: ''
 };
 
-function CourseManagement() {
+function CourseManagement({ onCoursesUpdated, onCountChange }) {
   const [courses, setCourses] = useState([]);
   const [course, setCourse] = useState(emptyCourse);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -30,9 +31,18 @@ function CourseManagement() {
       setError('');
 
       const data = await getAllCourses();
-      setCourses(data);
+      const list = data || [];
+      setCourses(list);
+      if (onCountChange) {
+        onCountChange(list.length);
+      }
     } catch (err) {
-      setError('Unable to load courses. Check your backend.');
+      const data = err.response?.data;
+      setError(
+        typeof data === 'string'
+          ? data
+          : data?.message || 'Unable to load courses. Check your backend.'
+      );
     } finally {
       setLoading(false);
     }
@@ -59,6 +69,12 @@ function CourseManagement() {
 
     setError('');
     setMessage('');
+
+    if (!course.title.trim()) {
+      setError('Please provide a course title.');
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -72,9 +88,15 @@ function CourseManagement() {
 
       resetForm();
       await loadCourses();
+      if (onCoursesUpdated) {
+        onCoursesUpdated();
+      }
     } catch (err) {
+      const data = err.response?.data;
       setError(
-        err.response?.data || 'Unable to save course.'
+        typeof data === 'string'
+          ? data
+          : data?.message || 'Unable to save course.'
       );
     } finally {
       setSaving(false);
@@ -93,204 +115,258 @@ function CourseManagement() {
     setMessage('');
     setError('');
 
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth'
-    });
+    const formElement = document.getElementById('course-form-card');
+    if (formElement) {
+      formElement.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   const handleDelete = async (id, title) => {
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${title}"?`
+      `Are you sure you want to delete course "${title}"? This will also remove all its associated lessons and enrollments.`
     );
 
     if (!confirmed) return;
 
     try {
+      setDeletingId(id);
+      setError('');
+      setMessage('');
+
       await deleteCourse(id);
 
-      setCourses((previous) =>
-        previous.filter((item) => item.id !== id)
-      );
+      const updated = courses.filter((item) => item.id !== id);
+      setCourses(updated);
+      if (onCountChange) {
+        onCountChange(updated.length);
+      }
 
-      setMessage('Course deleted successfully!');
-      setError('');
+      setMessage(`Course "${title}" deleted successfully!`);
 
       if (editingId === id) {
         resetForm();
       }
+
+      if (onCoursesUpdated) {
+        onCoursesUpdated();
+      }
     } catch (err) {
-      setError('Unable to delete course.');
+      const data = err.response?.data;
+      setError(
+        typeof data === 'string'
+          ? data
+          : data?.message || 'Unable to delete course.'
+      );
+    } finally {
+      setDeletingId(null);
     }
   };
 
   return (
     <div>
-      <div className="dashboard-card">
-        <h4>{editingId ? 'Edit Course' : 'Add New Course'}</h4>
+      {/* Course Add / Edit Form Card */}
+      <div className="card border-0 shadow-sm rounded-4 mb-4 bg-white" id="course-form-card">
+        <div className="card-header bg-white p-4 border-bottom">
+          <h5 className="fw-bold mb-1" style={{ color: '#102a43' }}>
+            {editingId ? 'Edit Course' : 'Add New Course'}
+          </h5>
+          <p className="text-muted small mb-0">
+            {editingId
+              ? 'Update the course details below.'
+              : 'Fill in the information to publish a new course to the catalog.'}
+          </p>
+        </div>
 
-        <p>Enter the course information below.</p>
-
-        {error && (
-          <div className="alert alert-danger">{error}</div>
-        )}
-
-        {message && (
-          <div className="alert alert-success">{message}</div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <div className="row">
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Course Title</label>
-
-              <input
-                type="text"
-                name="title"
-                className="form-control"
-                placeholder="Enter course title"
-                value={course.title}
-                onChange={handleChange}
-                required
-              />
+        <div className="card-body p-4">
+          {error && (
+            <div className="alert alert-danger shadow-sm alert-dismissible fade show" role="alert">
+              {error}
+              <button type="button" className="btn-close" onClick={() => setError('')} />
             </div>
-
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Instructor</label>
-
-              <input
-                type="text"
-                name="instructor"
-                className="form-control"
-                placeholder="Enter instructor name"
-                value={course.instructor}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="col-md-6 mb-3">
-              <label className="form-label">Duration</label>
-
-              <input
-                type="text"
-                name="duration"
-                className="form-control"
-                placeholder="Example: 8 Weeks"
-                value={course.duration}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="col-md-12 mb-3">
-              <label className="form-label">Description</label>
-
-              <textarea
-                name="description"
-                className="form-control"
-                rows="4"
-                placeholder="Enter course description"
-                value={course.description}
-                onChange={handleChange}
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="btn btn-primary me-2"
-            disabled={saving}
-          >
-            {saving
-              ? 'Saving...'
-              : editingId
-                ? 'Update Course'
-                : 'Add Course'}
-          </button>
-
-          {editingId && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={resetForm}
-            >
-              Cancel
-            </button>
           )}
-        </form>
+
+          {message && (
+            <div className="alert alert-success shadow-sm alert-dismissible fade show" role="alert">
+              {message}
+              <button type="button" className="btn-close" onClick={() => setMessage('')} />
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <div className="row g-3">
+              <div className="col-md-6">
+                <label className="form-label fw-semibold small">Course Title *</label>
+                <input
+                  type="text"
+                  name="title"
+                  className="form-control"
+                  placeholder="e.g. Advanced Java & Cloud Native"
+                  value={course.title}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div className="col-md-3">
+                <label className="form-label fw-semibold small">Instructor</label>
+                <input
+                  type="text"
+                  name="instructor"
+                  className="form-control"
+                  placeholder="e.g. Dr. Robert Vance"
+                  value={course.instructor}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="col-md-3">
+                <label className="form-label fw-semibold small">Duration</label>
+                <input
+                  type="text"
+                  name="duration"
+                  className="form-control"
+                  placeholder="e.g. 10 Weeks"
+                  value={course.duration}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="col-12">
+                <label className="form-label fw-semibold small">Course Description</label>
+                <textarea
+                  name="description"
+                  className="form-control"
+                  rows="3"
+                  placeholder="Comprehensive description of the topics and skills covered..."
+                  value={course.description}
+                  onChange={handleChange}
+                />
+              </div>
+            </div>
+
+            <div className="d-flex gap-2 mt-4">
+              <button
+                type="submit"
+                className="btn btn-primary px-4 fw-semibold"
+                disabled={saving}
+                style={{ background: '#176b87', borderColor: '#176b87' }}
+              >
+                {saving
+                  ? 'Saving...'
+                  : editingId
+                    ? 'Update Course'
+                    : 'Publish Course'}
+              </button>
+
+              {editingId && (
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary px-3"
+                  onClick={resetForm}
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
       </div>
 
-      <div className="dashboard-card">
-        <div className="d-flex justify-content-between align-items-center mb-4">
+      {/* Courses List Table Card */}
+      <div className="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+        <div className="card-header bg-white p-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div>
-            <h4>All Courses</h4>
-            <p>Manage your available courses.</p>
+            <h5 className="fw-bold mb-1" style={{ color: '#102a43' }}>
+              All Courses ({courses.length})
+            </h5>
+            <p className="text-muted small mb-0">
+              Manage existing courses available in the LMS catalog.
+            </p>
           </div>
 
           <button
-            className="btn btn-outline-primary"
+            className="btn btn-outline-primary btn-sm"
             onClick={loadCourses}
             disabled={loading}
           >
-            Refresh
+            {loading ? 'Refreshing...' : '↻ Refresh'}
           </button>
         </div>
 
-        {loading ? (
-          <p>Loading courses...</p>
-        ) : courses.length === 0 ? (
-          <p>No courses available. Add your first course above.</p>
-        ) : (
-          <div className="table-responsive">
-            <table className="table table-hover align-middle">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Course</th>
-                  <th>Instructor</th>
-                  <th>Duration</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {courses.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.id}</td>
-                    <td>
-                      <strong>{item.title}</strong>
-                      <div className="text-muted small">
-                        {item.description}
-                      </div>
-                    </td>
-                    <td>{item.instructor}</td>
-                    <td>{item.duration}</td>
-                    <td>
-                      <div className="d-flex gap-2">
-                        <button
-                          className="btn btn-sm btn-warning"
-                          onClick={() => handleEdit(item)}
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          className="btn btn-sm btn-danger"
-                          onClick={() =>
-                            handleDelete(item.id, item.title)
-                          }
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
+        <div className="p-4">
+          {loading ? (
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary" role="status" />
+              <p className="text-muted mt-3">Loading courses...</p>
+            </div>
+          ) : courses.length === 0 ? (
+            <div className="text-center py-5 text-muted">
+              <div className="fs-1 mb-2">📚</div>
+              <h6>No courses available yet</h6>
+              <p className="small mb-0">Use the form above to publish your first course.</p>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-hover align-middle mb-0">
+                <thead className="table-light">
+                  <tr>
+                    <th style={{ width: '70px' }}>ID</th>
+                    <th>Course Details</th>
+                    <th>Instructor</th>
+                    <th>Duration</th>
+                    <th className="text-end" style={{ width: '160px' }}>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+
+                <tbody>
+                  {courses.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <span className="badge bg-secondary-subtle text-secondary font-monospace">
+                          #{item.id}
+                        </span>
+                      </td>
+                      <td>
+                        <strong className="text-dark d-block">{item.title}</strong>
+                        <small className="text-muted text-truncate d-inline-block" style={{ maxWidth: '350px' }}>
+                          {item.description || 'No description provided.'}
+                        </small>
+                      </td>
+                      <td>
+                        <span className="text-secondary small">
+                          {item.instructor || 'Unassigned'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge bg-light text-dark border">
+                          {item.duration || 'Flexible'}
+                        </span>
+                      </td>
+                      <td className="text-end">
+                        <div className="d-flex justify-content-end gap-1">
+                          <button
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => handleEdit(item)}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => handleDelete(item.id, item.title)}
+                            disabled={deletingId === item.id}
+                          >
+                            {deletingId === item.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

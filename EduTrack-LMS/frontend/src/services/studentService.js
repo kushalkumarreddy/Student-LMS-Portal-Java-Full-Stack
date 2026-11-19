@@ -1,14 +1,12 @@
 
-import axios from 'axios';
-
-const API_URL = 'http://localhost:8080/api/admin';
+import api from './api';
 
 export const getAllStudents = async () => {
-  const response = await axios.get(`${API_URL}/students`);
+  const response = await api.get('/admin/students');
   return response.data;
 };
 
-export const deleteStudent = async (id) => {
-  const response = await axios.delete(`${API_URL}/students/${id}`);
+export const deleteStudent = async (studentId) => {
+  const response = await api.delete(`/admin/students/${studentId}`);
   return response.data;
 };

@@ -17,4 +17,8 @@ public interface EnrollmentRepository
         Long courseId
     );
 
+    void deleteAllByStudent_Id(Long studentId);
+
+    void deleteAllByCourse_Id(Long courseId);
+
 }

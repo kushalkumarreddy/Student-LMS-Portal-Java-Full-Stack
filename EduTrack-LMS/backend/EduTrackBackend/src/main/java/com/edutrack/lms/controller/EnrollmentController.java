@@ -1,10 +1,13 @@
 
 package com.edutrack.lms.controller;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import com.edutrack.lms.dto.EnrollmentRequest;
@@ -12,13 +15,14 @@ import com.edutrack.lms.dto.EnrollmentResponse;
 import com.edutrack.lms.entity.AppUser;
 import com.edutrack.lms.entity.Course;
 import com.edutrack.lms.entity.Enrollment;
-import com.edutrack.lms.repository.UserRepository;
 import com.edutrack.lms.repository.CourseRepository;
 import com.edutrack.lms.repository.EnrollmentRepository;
+import com.edutrack.lms.repository.UserRepository;
+import com.edutrack.lms.service.AuthTokenService.TokenData;
 
 @RestController
 @RequestMapping("/api/enrollments")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 public class EnrollmentController {
 
     private final EnrollmentRepository enrollmentRepository;
@@ -35,96 +39,140 @@ public class EnrollmentController {
         this.courseRepository = courseRepository;
     }
 
-    // Enroll a student in a course
     @PostMapping
-    public ResponseEntity<?> enrollStudent(
-            @RequestBody EnrollmentRequest request) {
+    public ResponseEntity<?> enroll(
+            @RequestBody EnrollmentRequest request,
+            Authentication authentication) {
 
-        if (request.getStudentId() == null ||
-            request.getCourseId() == null) {
+        TokenData currentUser = getCurrentUser(authentication);
 
-            return ResponseEntity.badRequest()
-                    .body("Student ID and Course ID are required");
+        if (currentUser == null ||
+                !"STUDENT".equals(currentUser.role())) {
+
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "message",
+                            "Only students can enroll in courses."
+                    ));
         }
 
-        AppUser student = userRepository
-                .findById(request.getStudentId())
-                .orElse(null);
-
-        if (student == null ||
-            !"STUDENT".equals(student.getRole())) {
-
+        if (request.getCourseId() == null) {
             return ResponseEntity.badRequest()
-                    .body("Invalid student account");
+                    .body(Map.of(
+                            "message",
+                            "Course ID is required."
+                    ));
         }
 
-        Course course = courseRepository
-                .findById(request.getCourseId())
+        Long studentId = currentUser.id();
+
+        AppUser student = userRepository.findById(studentId)
                 .orElse(null);
+
+        if (student == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of(
+                            "message",
+                            "Student account not found."
+                    ));
+        }
+
+        Course course = courseRepository.findById(
+                request.getCourseId()
+        ).orElse(null);
 
         if (course == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body("Course not found");
+                    .body(Map.of(
+                            "message",
+                            "Course not found."
+                    ));
         }
 
-        boolean alreadyEnrolled =
-                enrollmentRepository
-                .existsByStudent_IdAndCourse_Id(
-                    student.getId(),
-                    course.getId()
-                );
+        if (enrollmentRepository.existsByStudent_IdAndCourse_Id(
+                studentId,
+                course.getId())) {
 
-        if (alreadyEnrolled) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body("You are already enrolled in this course");
+                    .body(Map.of(
+                            "message",
+                            "You are already enrolled in this course."
+                    ));
         }
 
-        Enrollment enrollment =
-                new Enrollment(student, course);
+        Enrollment enrollment = new Enrollment();
 
-        Enrollment saved =
-                enrollmentRepository.save(enrollment);
+        enrollment.setStudent(student);
+        enrollment.setCourse(course);
+        enrollment.setEnrolledAt(LocalDateTime.now());
+
+        Enrollment saved = enrollmentRepository.save(enrollment);
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body("Successfully enrolled in " + course.getTitle());
+                .body(toResponse(saved));
     }
 
-    // Get all courses enrolled by a student
     @GetMapping("/student/{studentId}")
     public ResponseEntity<?> getStudentEnrollments(
-            @PathVariable Long studentId) {
+            @PathVariable Long studentId,
+            Authentication authentication) {
 
-        AppUser student = userRepository
-                .findById(studentId)
-                .orElse(null);
+        TokenData currentUser = getCurrentUser(authentication);
 
-        if (student == null ||
-            !"STUDENT".equals(student.getRole())) {
-
-            return ResponseEntity.badRequest()
-                    .body("Invalid student account");
+        if (currentUser == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(
+                            "message",
+                            "Please sign in."
+                    ));
         }
 
-        List<EnrollmentResponse> response =
-                enrollmentRepository
-                .findAllByStudent_Id(studentId)
-                .stream()
-                .map(enrollment -> {
+        boolean isAdmin = "ADMIN".equals(currentUser.role());
 
-                    Course course = enrollment.getCourse();
+        boolean isOwnAccount = currentUser.id().equals(studentId);
 
-                    return new EnrollmentResponse(
-                        enrollment.getId(),
-                        course.getId(),
-                        course.getTitle(),
-                        course.getDescription(),
-                        course.getInstructor(),
-                        course.getDuration(),
-                        enrollment.getEnrolledAt()
-                    );
-                })
-                .toList();
+        if (!isAdmin && !isOwnAccount) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "message",
+                            "You cannot access another student's enrollments."
+                    ));
+        }
 
-        return ResponseEntity.ok(response);
+        List<EnrollmentResponse> result =
+                enrollmentRepository.findAllByStudent_Id(studentId)
+                        .stream()
+                        .map(this::toResponse)
+                        .toList();
+
+        return ResponseEntity.ok(result);
+    }
+
+    private TokenData getCurrentUser(
+            Authentication authentication) {
+
+        if (authentication == null ||
+                !(authentication.getPrincipal() instanceof TokenData)) {
+
+            return null;
+        }
+
+        return (TokenData) authentication.getPrincipal();
+    }
+
+    private EnrollmentResponse toResponse(
+            Enrollment enrollment) {
+
+        EnrollmentResponse response = new EnrollmentResponse();
+
+        response.setId(enrollment.getId());
+        response.setCourseId(enrollment.getCourse().getId());
+        response.setTitle(enrollment.getCourse().getTitle());
+        response.setDescription(enrollment.getCourse().getDescription());
+        response.setInstructor(enrollment.getCourse().getInstructor());
+        response.setDuration(enrollment.getCourse().getDuration());
+        response.setEnrolledAt(enrollment.getEnrolledAt());
+
+        return response;
     }
 }

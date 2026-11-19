@@ -1,44 +1,56 @@
-package com.edutrack.lms.controller;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.*;
+package com.edutrack.lms.controller;
 
 import com.edutrack.lms.dto.AuthResponse;
 import com.edutrack.lms.dto.LoginRequest;
 import com.edutrack.lms.dto.RegisterRequest;
 import com.edutrack.lms.entity.AppUser;
 import com.edutrack.lms.repository.UserRepository;
+import com.edutrack.lms.service.AuthTokenService;
+
+import jakarta.servlet.http.HttpServletRequest;
+
+import java.util.Map;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 public class AuthController {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuthTokenService tokenService;
 
     public AuthController(
             UserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            AuthTokenService tokenService) {
 
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.tokenService = tokenService;
     }
 
-    // LOGIN
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<?> login(
+            @RequestBody LoginRequest request) {
 
-        if (request.getEmail() == null || request.getPassword() == null) {
+        if (request.getEmail() == null ||
+                request.getPassword() == null) {
+
             return ResponseEntity.badRequest()
                     .body("Email and password are required");
         }
 
         String email = request.getEmail().trim().toLowerCase();
 
-        AppUser user = userRepository.findByEmail(email).orElse(null);
+        AppUser user = userRepository.findByEmail(email)
+                .orElse(null);
 
         if (user == null ||
                 !passwordEncoder.matches(
@@ -49,21 +61,26 @@ public class AuthController {
                     .body("Invalid email or password");
         }
 
+        String token = tokenService.createToken(user);
+
         AuthResponse response = new AuthResponse(
                 "Login successful",
                 user.getId(),
                 user.getEmail(),
-                user.getRole()
+                user.getRole(),
+                token
         );
 
         return ResponseEntity.ok(response);
     }
 
-    // STUDENT REGISTRATION
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<?> register(
+            @RequestBody RegisterRequest request) {
 
-        if (request.getEmail() == null || request.getPassword() == null) {
+        if (request.getEmail() == null ||
+                request.getPassword() == null) {
+
             return ResponseEntity.badRequest()
                     .body("Email and password are required");
         }
@@ -71,14 +88,14 @@ public class AuthController {
         String email = request.getEmail().trim().toLowerCase();
         String password = request.getPassword();
 
-        if (email.isBlank()) {
+        if (email.isEmpty() || !email.contains("@")) {
             return ResponseEntity.badRequest()
-                    .body("Email is required");
+                    .body("Please enter a valid email address");
         }
 
-        if (password.length() < 8) {
+        if (password.length() < 6) {
             return ResponseEntity.badRequest()
-                    .body("Password must contain at least 8 characters");
+                    .body("Password must contain at least 6 characters");
         }
 
         if (userRepository.existsByEmail(email)) {
@@ -86,21 +103,42 @@ public class AuthController {
                     .body("Email is already registered");
         }
 
-        AppUser student = new AppUser(
-                email,
-                passwordEncoder.encode(password),
-                "STUDENT"
-        );
+        AppUser student = new AppUser();
+
+        student.setEmail(email);
+        student.setPassword(passwordEncoder.encode(password));
+        student.setRole("STUDENT");
 
         AppUser savedUser = userRepository.save(student);
+
+        String token = tokenService.createToken(savedUser);
 
         AuthResponse response = new AuthResponse(
                 "Registration successful",
                 savedUser.getId(),
                 savedUser.getEmail(),
-                savedUser.getRole()
+                savedUser.getRole(),
+                token
         );
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(response);
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(
+            HttpServletRequest request) {
+
+        String authorization =
+                request.getHeader("Authorization");
+
+        if (authorization != null &&
+                authorization.startsWith("Bearer ")) {
+
+            String token = authorization.substring(7);
+            tokenService.removeToken(token);
+        }
+
+        return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
     }
 }

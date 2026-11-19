@@ -13,4 +13,6 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
 
     List<Lesson> findAllByCourse_IdOrderByLessonOrderAsc(Long courseId);
 
+    void deleteAllByCourse_Id(Long courseId);
+
 }
