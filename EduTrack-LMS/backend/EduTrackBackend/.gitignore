@@ -4,6 +4,12 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+# Local databases and environment files
+*.db-journal
+.env
+.env.*
+*.log
+
 ### STS ###
 .apt_generated
 .classpath

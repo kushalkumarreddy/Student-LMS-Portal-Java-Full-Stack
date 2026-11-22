@@ -1,0 +1,13 @@
+target/
+.git/
+.gitignore
+.settings/
+.classpath
+.project
+.mvn/
+mvnw
+mvnw.cmd
+*.db
+*.db-journal
+*.log
+.DS_Store

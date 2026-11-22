@@ -3,6 +3,7 @@ package com.edutrack.lms.config;
 
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +19,12 @@ import com.edutrack.lms.repository.UserRepository;
 @Configuration
 public class DataInitializer {
 
+    @Value("${app.admin.email:admin@edutrack.com}")
+    private String adminEmail;
+
+    @Value("${app.admin.password:Admin@123}")
+    private String adminPassword;
+
     @Bean
     public CommandLineRunner initializeData(
             UserRepository userRepository,
@@ -26,23 +33,29 @@ public class DataInitializer {
             PasswordEncoder passwordEncoder) {
 
         return args -> {
-            String adminEmail = "admin@edutrack.com";
-            Optional<AppUser> adminOpt = userRepository.findByEmail(adminEmail);
+            String email = (adminEmail != null && !adminEmail.isBlank())
+                    ? adminEmail.trim().toLowerCase()
+                    : "admin@edutrack.com";
+            String password = (adminPassword != null && !adminPassword.isBlank())
+                    ? adminPassword
+                    : "Admin@123";
+
+            Optional<AppUser> adminOpt = userRepository.findByEmail(email);
 
             if (adminOpt.isEmpty()) {
                 AppUser admin = new AppUser();
-                admin.setEmail(adminEmail);
-                admin.setPassword(passwordEncoder.encode("Admin@123"));
+                admin.setEmail(email);
+                admin.setPassword(passwordEncoder.encode(password));
                 admin.setRole("ADMIN");
                 userRepository.save(admin);
-                System.out.println("Default Admin Created (admin@edutrack.com / Admin@123)!");
+                System.out.println("Default Admin account verified/created: " + email);
             } else {
                 AppUser admin = adminOpt.get();
-                if (!passwordEncoder.matches("Admin@123", admin.getPassword())) {
-                    admin.setPassword(passwordEncoder.encode("Admin@123"));
+                if (!passwordEncoder.matches(password, admin.getPassword())) {
+                    admin.setPassword(passwordEncoder.encode(password));
                     admin.setRole("ADMIN");
                     userRepository.save(admin);
-                    System.out.println("Admin password updated to encoded Admin@123!");
+                    System.out.println("Admin password synchronized for: " + email);
                 }
             }
 

@@ -22,7 +22,6 @@ import com.edutrack.lms.service.AuthTokenService.TokenData;
 
 @RestController
 @RequestMapping("/api/enrollments")
-@CrossOrigin(origins = {"http://localhost:5173", "http://127.0.0.1:5173"})
 public class EnrollmentController {
 
     private final EnrollmentRepository enrollmentRepository;

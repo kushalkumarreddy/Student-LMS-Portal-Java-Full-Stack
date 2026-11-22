@@ -1,6 +1,7 @@
 
 package com.edutrack.lms.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -19,12 +20,17 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import jakarta.servlet.http.HttpServletResponse;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
 public class SecurityConfig {
 
     private final AuthTokenFilter authTokenFilter;
+
+    @Value("${app.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}")
+    private String allowedOriginsConfig;
 
     public SecurityConfig(AuthTokenFilter authTokenFilter) {
         this.authTokenFilter = authTokenFilter;
@@ -56,6 +62,9 @@ public class SecurityConfig {
 
                 // Pre-flight CORS options
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                // Health check
+                .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
 
                 // Login and registration
                 .requestMatchers("/api/auth/**").permitAll()
@@ -137,16 +146,31 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
 
-        configuration.setAllowedOriginPatterns(
-            List.of("http://localhost:[*]", "http://127.0.0.1:[*]")
-        );
+        List<String> origins = new ArrayList<>();
+        origins.add("http://localhost:[*]");
+        origins.add("http://127.0.0.1:[*]");
+        origins.add("http://localhost:*");
+        origins.add("http://127.0.0.1:*");
+
+        if (allowedOriginsConfig != null && !allowedOriginsConfig.isBlank()) {
+            Arrays.stream(allowedOriginsConfig.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .forEach(origins::add);
+        }
+
+        configuration.setAllowedOriginPatterns(origins.stream().distinct().toList());
 
         configuration.setAllowedMethods(
-            List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH")
+            List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
         );
 
         configuration.setAllowedHeaders(
-            List.of("*")
+            List.of("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With")
+        );
+
+        configuration.setExposedHeaders(
+            List.of("Authorization")
         );
 
         configuration.setAllowCredentials(true);
